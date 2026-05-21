@@ -226,6 +226,40 @@ Every agent run creates a full trace showing exactly what happened:
 This gives you complete visibility into what your agent did, why it failed, and how much
 it cost.
 
+### Optional context input events
+
+Tool and model spans show what the agent did after it started. Some headless
+workflows also need to debug which repo instructions, skills, hooks, or memory
+records entered the session in the first place. For that, `TelemetryHooks` exposes
+an opt-in helper that records a privacy-preserving `context.input.loaded` event on
+the session span.
+
+The event should carry paths/URIs, hashes, and categorical metadata only. Do not
+attach raw prompt text, raw context bodies, tool arguments, secrets, memory
+contents, or full transcripts unless your application has an explicit opt-in policy.
+
+```python
+from claude_telemetry.hooks import TelemetryHooks
+
+hooks = TelemetryHooks()
+# Start the session span using the normal hook flow first.
+hooks.record_context_input_loaded(
+    kind="agent_instruction_file",
+    source_path="AGENTS.md",
+    source_bytes_hash="sha256:...",
+    delivered_hash="sha256:...",
+    loaded_by="claude_code",
+    activation="session_start",
+    scope="repo",
+    duplicate_suppression_policy="not_evaluated",
+    extra_attributes={"gen_ai.conversation.id": "session-123"},
+)
+```
+
+This is intentionally small: it lets wrappers or harnesses correlate context inputs
+with the existing tool/model trace without making `claude_telemetry` inspect raw
+project context.
+
 ## Span Hierarchy
 
 ```
