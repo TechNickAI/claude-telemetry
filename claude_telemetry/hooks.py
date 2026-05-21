@@ -504,6 +504,56 @@ class TelemetryHooks:
 
         return {}
 
+    def record_context_input_loaded(
+        self,
+        *,
+        kind: str,
+        source_path: str | None = None,
+        source_uri: str | None = None,
+        source_bytes_hash: str | None = None,
+        delivered_hash: str | None = None,
+        loaded_by: str = "unknown",
+        activation: str = "unknown",
+        scope: str = "unknown",
+        duplicate_suppression_policy: str = "not_evaluated",
+        extra_attributes: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a privacy-preserving context input event on the session span.
+
+        This is an opt-in helper for harnesses that know when context was loaded
+        before or during an agent run. It records identities and categorical
+        metadata only; callers should pass hashes/paths/URIs, not raw prompt,
+        raw context text, tool arguments, or memory contents.
+        """
+        if not self.session_span:
+            msg = "No active session span"
+            raise RuntimeError(msg)
+
+        event_data: dict[str, Any] = {
+            "context.input.kind": kind,
+            "context.input.loaded_by": loaded_by,
+            "context.input.activation": activation,
+            "context.input.scope": scope,
+            "context.input.duplicate.suppression_policy": (
+                duplicate_suppression_policy
+            ),
+        }
+
+        optional_fields = {
+            "context.input.source.path": source_path,
+            "context.input.source.uri": source_uri,
+            "context.input.source.bytes_hash": source_bytes_hash,
+            "context.input.delivered.hash": delivered_hash,
+        }
+        for key, value in optional_fields.items():
+            if value is not None:
+                event_data[key] = value
+
+        if extra_attributes:
+            event_data.update(extra_attributes)
+
+        self.session_span.add_event("context.input.loaded", event_data)
+
     async def on_pre_tool_use(
         self,
         input_data: dict[str, Any],

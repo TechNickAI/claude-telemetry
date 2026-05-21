@@ -107,6 +107,48 @@ class TestUserPromptSubmit:
         assert hooks.messages[0]["content"] == "Test prompt"
 
 
+class TestContextInputLoaded:
+    """Tests for privacy-preserving context input events."""
+
+    def test_records_context_input_event(self, hooks, mocker):
+        """Context input events include hashes and metadata, not raw content."""
+        hooks.session_span = mocker.MagicMock()
+
+        hooks.record_context_input_loaded(
+            kind="agent_instruction_file",
+            source_path="AGENTS.md",
+            source_bytes_hash="sha256:source",
+            delivered_hash="sha256:delivered",
+            loaded_by="claude_code",
+            activation="session_start",
+            scope="repo",
+            duplicate_suppression_policy="suppress_equal_dedupe_key_within_scope",
+            extra_attributes={
+                "gen_ai.conversation.id": "session-123",
+                "context.input.delivered.full_render.status": "available",
+            },
+        )
+
+        hooks.session_span.add_event.assert_called_once()
+        event_name, event_data = hooks.session_span.add_event.call_args[0]
+        assert event_name == "context.input.loaded"
+        assert event_data["context.input.kind"] == "agent_instruction_file"
+        assert event_data["context.input.source.path"] == "AGENTS.md"
+        assert event_data["context.input.source.bytes_hash"] == "sha256:source"
+        assert event_data["context.input.delivered.hash"] == "sha256:delivered"
+        assert event_data["context.input.loaded_by"] == "claude_code"
+        assert event_data["context.input.activation"] == "session_start"
+        assert event_data["context.input.scope"] == "repo"
+        assert event_data["gen_ai.conversation.id"] == "session-123"
+
+    def test_requires_active_session_span(self, hooks):
+        """Context input events need a session span boundary."""
+        hooks.session_span = None
+
+        with pytest.raises(RuntimeError, match="No active session span"):
+            hooks.record_context_input_loaded(kind="agent_instruction_file")
+
+
 class TestPreToolUse:
     """Tests for on_pre_tool_use hook."""
 
